@@ -1,12 +1,65 @@
-const app = require('./app');
-const port = process.env.PORT || 3000
+const http = require('http');
+const Koa = require('koa');
+const cors = require('@koa/cors');
+const koaBody = require('koa-body');
+const WS = require('ws');
+const Router = require('koa-router');
+const router = new Router();
+const idGenerator = require('node-unique-id-generator');
 
-async function start() {
-  try {
-    app.listen(port, () => console.log(`Server has been started on ${port} port.`))
-  } catch (e) {
-    console.log(e)
+const app = new Koa();
+const port = process.env.PORT || 3000;
+const userState = [];
+
+app.use(cors());
+app.use(koaBody({urlencoded: true, multipart: true, json: true,}));
+
+router.post('/newuser', async (ctx) => {
+  if (Object.keys(ctx.request.body).length === 0) {
+    ctx.response.body = 'Нет данных'
   }
-}
+  const { name } = ctx.request.body;
+  const isExist = userState.find(user => user.name === name);
+  if (!isExist) {
+    const newUser = {
+      id: idGenerator.generateGUID(),
+      name: name
+    }
+    userState.push(newUser);
+    ctx.response.body = {
+      status: 'ok',
+      user: newUser
+    };
+  } else {
+    ctx.response.body = {
+      status: 'error',
+      message: 'This name is already taken!'
+    };
+  }
+})
 
-start();
+
+
+app.use(router.routes());
+
+
+
+const server = http.createServer(app.callback())
+const wsServer = new WS.Server({ server });
+
+wsServer.on('connection', (ws, req) => {
+  ws.on('message', msg => {
+    // console.log('msg');
+    // ws.send('response');
+    [...wsServer.clients]
+      .filter(o => o.readyState === WS.OPEN)
+      .forEach(o => o.send('some message'));
+  });
+
+  ws.send('welcome');
+});
+
+server.listen(port);
+
+
+
