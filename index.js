@@ -18,7 +18,7 @@ router.post('/newuser', async (ctx) => {
   if (Object.keys(ctx.request.body).length === 0) {
     ctx.response.body = 'Нет данных'
   }
-  const { name } = ctx.request.body;
+  const { name }  = JSON.parse(ctx.request.body);
   const isExist = userState.find(user => user.name === name);
   if (!isExist) {
     const newUser = {
@@ -49,14 +49,24 @@ const wsServer = new WS.Server({ server });
 
 wsServer.on('connection', (ws, req) => {
   ws.on('message', msg => {
-    // console.log('msg');
-    // ws.send('response');
-    [...wsServer.clients]
+    const receivedMSG = JSON.parse(msg);
+    if (receivedMSG.type === 'exit') {
+      const idx = userState.findIndex(user => user.name === receivedMSG.user.name);
+      userState.splice(idx, 1);
+      [...wsServer.clients]
       .filter(o => o.readyState === WS.OPEN)
-      .forEach(o => o.send('some message'));
+      .forEach(o => o.send(JSON.stringify(userState)));
+      return;
+    }
+    if (receivedMSG.type === 'send') {
+      [...wsServer.clients]
+      .filter(o => o.readyState === WS.OPEN)
+      .forEach(o => o.send(msg));
+    }    
   });
-
-  ws.send('welcome');
+  [...wsServer.clients]
+      .filter(o => o.readyState === WS.OPEN)
+      .forEach(o => o.send(JSON.stringify(userState)));  
 });
 
 server.listen(port);
